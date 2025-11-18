@@ -382,3 +382,6 @@ score_label.place(relx=0.5, y=400, anchor="center")
 # === Start Application ===
 show_frame(menu_frame)
 root.mainloop()
+
+
+#Achilles Maling
