@@ -11,10 +11,10 @@ from utils.helpers import MathHelper, PowerUpManager
 
 
 # Image loading helper with aspect ratio preservation
-def load_image_with_aspect(path, max_width, max_height):
+def load_image_with_aspect(path, max_width, max_height, remove_color=None):
     """Load image preserving aspect ratio"""
     try:
-        original = Image.open(path)
+        original = Image.open(path).convert("RGBA")
         # Calculate aspect ratio preserving dimensions
         original_ratio = original.width / original.height
         target_ratio = max_width / max_height
@@ -29,11 +29,24 @@ def load_image_with_aspect(path, max_width, max_height):
             new_width = int(max_height * original_ratio)
         
         resized = original.resize((new_width, new_height), Image.LANCZOS)
+
+        if remove_color is not None:
+            # Remove a solid background (e.g., black) to keep icons clean
+            data = resized.getdata()
+            cleaned = []
+            target = tuple(remove_color)
+            for pixel in data:
+                if pixel[:3] == target:
+                    cleaned.append((pixel[0], pixel[1], pixel[2], 0))
+                else:
+                    cleaned.append(pixel)
+            resized.putdata(cleaned)
+
         return ImageTk.PhotoImage(resized)
     except Exception as e:
         print(f"Error loading image {path}: {e}")
         # Create fallback image
-        fallback = Image.new('RGB', (max_width, max_height), color='#2C3E50')
+        fallback = Image.new('RGBA', (max_width, max_height), color='#2C3E50')
         return ImageTk.PhotoImage(fallback)
 
 # === Game Difficulty Levels ===
@@ -403,14 +416,14 @@ subtitle_label = tk.Label(main_menu_frame, text="Master Mathematics Among the St
 subtitle_label.place(relx=0.5, rely=0.3, anchor="center")
 
 # Launch Adventure button
-launch_image = load_image_with_aspect(START_IMG_PATH, 300, 65)
+launch_image = load_image_with_aspect(START_IMG_PATH, 300, 65, remove_color=(0, 0, 0))
 launch_button = tk.Label(main_menu_frame, image=launch_image, bg="black", cursor="hand2")
 launch_button.image = launch_image
 launch_button.bind("<Button-1>", lambda e: GameEngine.show_level_selection())
 launch_button.place(relx=0.5, rely=0.6, anchor="center")
 
 # Exit Mission button
-exit_image = load_image_with_aspect(QUIT_IMG_PATH, 300, 65)
+exit_image = load_image_with_aspect(QUIT_IMG_PATH, 300, 65, remove_color=(0, 0, 0))
 exit_button = tk.Label(main_menu_frame, image=exit_image, bg="black", cursor="hand2")
 exit_button.image = exit_image
 exit_button.bind("<Button-1>", lambda e: main_window.quit())
