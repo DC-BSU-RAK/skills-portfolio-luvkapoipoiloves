@@ -10,6 +10,21 @@ from config.settings import *
 from utils.helpers import MathHelper, PowerUpManager
 
 
+PRIMARY_BG = "#020F1F"
+PANEL_BG = "#071A3F"
+INPUT_BG = "#04293A"
+ENTRY_BG = "#074973"
+ENTRY_ERROR_BG = "#360B0B"
+ENTRY_TEXT_COLOR = "#E1F5FE"
+ACCENT_CYAN = "#23C4ED"
+ACCENT_GOLD = "#F1C40F"
+ACCENT_ORANGE = "#FF8F34"
+SUCCESS_COLOR = "#00E676"
+WARNING_COLOR = "#FFB703"
+ERROR_COLOR = "#FF4C60"
+INFO_COLOR = "#4FC3F7"
+
+
 # Image loading helper with aspect ratio preservation
 def load_image_with_aspect(path, max_width, max_height, remove_color=None):
     """Load image preserving aspect ratio"""
@@ -48,6 +63,28 @@ def load_image_with_aspect(path, max_width, max_height, remove_color=None):
         # Create fallback image
         fallback = Image.new('RGBA', (max_width, max_height), color='#2C3E50')
         return ImageTk.PhotoImage(fallback)
+
+
+def show_feedback(message, color="#FFFFFF", duration=1500):
+    """Display smooth feedback messages in a consistent style."""
+    if 'result_display' not in globals():
+        return
+    result_display.config(text=message, fg=color)
+    if duration:
+        main_window.after(duration, lambda: result_display.config(text=""))
+
+
+def set_input_state(state="normal"):
+    """Tint the answer box to reflect its current status."""
+    if 'input_container' not in globals() or 'answer_input' not in globals():
+        return
+
+    if state == "error":
+        input_container.config(bg=ENTRY_ERROR_BG, highlightbackground=ERROR_COLOR)
+        answer_input.config(bg="#1B0000", fg=ENTRY_TEXT_COLOR)
+    else:
+        input_container.config(bg=INPUT_BG, highlightbackground=ACCENT_CYAN)
+        answer_input.config(bg=ENTRY_BG, fg=ENTRY_TEXT_COLOR)
 
 # === Game Difficulty Levels ===
 class GameLevel(Enum):
@@ -168,17 +205,17 @@ class GameEngine:
         
         if is_correct:
             base_points = 15 if Game.attempts_made == 0 else 7
-            result_display.config(text=f"SUCCESS! +{base_points} POINTS", fg="#4CAF50")
+            show_feedback(f"SUCCESS! +{base_points} POINTS", SUCCESS_COLOR, duration=1200)
             return True, base_points
         else:
             Game.attempts_made += 1
             if Game.attempts_made < 2:
-                result_display.config(text="NOT QUITE! TRY AGAIN!", fg="#FF9800")
+                show_feedback("NOT QUITE! TRY AGAIN!", WARNING_COLOR, duration=1200)
                 answer_input.delete(0, "end")
                 begin_countdown()
                 return False, 0
             else:
-                result_display.config(text=f"ANSWER: {correct}", fg="#F44336")
+                show_feedback(f"ANSWER: {correct}", ERROR_COLOR, duration=None)
                 return False, 0
     
     @staticmethod
@@ -216,11 +253,9 @@ def activate_time_boost():
         Game.remaining_time += 15
         Game.powerup_charges -= 1
         powerup_indicator.config(text=f"BOOSTS: {Game.powerup_charges}")
-        result_display.config(text="+15 SECONDS! ⏰", fg="#2196F3")
-        main_window.after(1000, lambda: result_display.config(text=""))
+        show_feedback("+15 SECONDS! ⏰", INFO_COLOR, duration=1000)
     else:
-        result_display.config(text="NO BOOSTS REMAINING! 😔", fg="#FF5252")
-        main_window.after(1500, lambda: result_display.config(text=""))
+        show_feedback("NO BOOSTS REMAINING! 😔", ERROR_COLOR)
 
 def activate_double_points():
     """Double points for next correct answer"""
@@ -228,14 +263,11 @@ def activate_double_points():
         Game.active_powerups.append('double_points')
         Game.powerup_charges -= 1
         powerup_indicator.config(text=f"BOOSTS: {Game.powerup_charges}")
-        result_display.config(text="NEXT ANSWER WORTH DOUBLE! 💎", fg="#E91E63")
-        main_window.after(1500, lambda: result_display.config(text=""))
+        show_feedback("NEXT ANSWER WORTH DOUBLE! 💎", "#FF5AA5")
     elif Game.powerup_charges <= 0:
-        result_display.config(text="NO BOOSTS REMAINING! 😔", fg="#FF5252")
-        main_window.after(1500, lambda: result_display.config(text=""))
+        show_feedback("NO BOOSTS REMAINING! 😔", ERROR_COLOR)
     else:
-        result_display.config(text="DOUBLE POINTS ALREADY ACTIVE! ✨", fg="#FF9800")
-        main_window.after(1500, lambda: result_display.config(text=""))
+        show_feedback("DOUBLE POINTS ALREADY ACTIVE! ✨", WARNING_COLOR)
 
 def apply_powerup_effects(points):
     """Apply active power-up effects to scored points"""
@@ -244,8 +276,7 @@ def apply_powerup_effects(points):
     if 'double_points' in Game.active_powerups:
         final_points *= 2
         Game.active_powerups.remove('double_points')
-        result_display.config(text=f"DOUBLE POINTS ACTIVATED! +{final_points} 🎉", fg="#E91E63")
-        main_window.after(1500, lambda: result_display.config(text=""))
+        show_feedback(f"DOUBLE POINTS ACTIVATED! +{final_points} 🎉", "#FF5AA5")
     
     return final_points
 
@@ -261,7 +292,7 @@ def update_timer_display():
     if Game.remaining_time >= 0:
         timer_indicator.config(
             text=f"TIME: {Game.remaining_time}s",
-            fg="#FF5252" if Game.remaining_time <= 8 else "#FFD740"
+            fg=ERROR_COLOR if Game.remaining_time <= 8 else WARNING_COLOR
         )
         Game.remaining_time -= 1
         Game.timer_reference = main_window.after(1000, update_timer_display)
@@ -284,7 +315,7 @@ def time_expired():
     else:
         correct = num1 * num2
         
-    result_display.config(text=f"TIME'S UP! ANSWER: {correct}", fg="#FF4081")
+    show_feedback(f"TIME'S UP! ANSWER: {correct}", "#FF4081", duration=None)
     disable_player_input()
     main_window.after(2000, advance_to_next)
 
@@ -319,7 +350,9 @@ def check_player_answer():
     try:
         player_answer = int(answer_input.get())
     except ValueError:
-        result_display.config(text="PLEASE ENTER A VALID NUMBER", fg="#FF5252")
+        set_input_state("error")
+        show_feedback("PLEASE ENTER A VALID NUMBER", ERROR_COLOR)
+        main_window.after(800, set_input_state)
         begin_countdown()
         return
 
@@ -354,9 +387,18 @@ def start_space_adventure(selected_level):
     screen_manager.activate()
 
     # Elevate game interface elements
-    game_elements = [game_back_control, challenge_title, timer_indicator, 
-                     problem_display, input_container, result_display, score_indicator,
-                     powerup_frame]
+    game_elements = [
+        game_back_control,
+        info_panel,
+        challenge_title,
+        timer_indicator,
+        score_indicator,
+        problem_display,
+        input_glow,
+        input_container,
+        result_display,
+        powerup_frame
+    ]
     for element in game_elements:
         element.lift()
 
@@ -394,7 +436,7 @@ main_window.resizable(False, False)
 # Create application screens
 main_menu_frame = tk.Frame(main_window, bg="black")
 level_select_frame = tk.Frame(main_window, bg="black")
-game_frame = tk.Frame(main_window, bg="black")
+game_frame = tk.Frame(main_window, bg=PRIMARY_BG)
 
 for screen in (main_menu_frame, level_select_frame, game_frame):
     screen.place(relwidth=1, relheight=1)
@@ -485,82 +527,196 @@ game_back_control.image = game_return_image
 game_back_control.bind("<Button-1>", lambda e: (stop_timer(), display_screen(level_select_frame)))
 game_back_control.place(x=25, y=10)
 
-# Challenge progress
-challenge_title = tk.Label(game_frame, font=("Arial", 22, "bold"), 
-                          fg="#FFD700", bg="black")
-challenge_title.place(relx=0.5, y=90, anchor="center")
+# Challenge progress and indicators
+info_panel = tk.Frame(
+    game_frame,
+    bg=PANEL_BG,
+    highlightbackground=ACCENT_GOLD,
+    highlightcolor=ACCENT_GOLD,
+    highlightthickness=1,
+    bd=0,
+    padx=20,
+    pady=12
+)
+info_panel.place(relx=0.5, y=85, anchor="center")
 
-# Time indicator
-timer_indicator = tk.Label(game_frame, font=("Arial", 16, "bold"), 
-                          bg="black", fg="#FFD740", padx=10, pady=5)
-timer_indicator.place(relx=0.5, y=140, anchor="center")
+challenge_title = tk.Label(
+    info_panel,
+    font=("Arial", 20, "bold"),
+    fg=ACCENT_GOLD,
+    bg=PANEL_BG,
+    padx=10
+)
+challenge_title.grid(row=0, column=0, padx=20)
+
+timer_indicator = tk.Label(
+    info_panel,
+    font=("Arial", 16, "bold"),
+    bg="#0A2A43",
+    fg=WARNING_COLOR,
+    padx=15,
+    pady=6
+)
+timer_indicator.grid(row=0, column=1, padx=20)
+
+score_indicator = tk.Label(
+    info_panel,
+    font=("Arial", 16, "bold"),
+    bg="#0A2A43",
+    fg=ACCENT_GOLD,
+    padx=15,
+    pady=6
+)
+score_indicator.grid(row=0, column=2, padx=20)
 
 # Math problem display
-problem_display = tk.Label(game_frame, font=("Arial", 24, "bold"), 
-                          bg="black", fg="#FFFFFF", padx=20, pady=10)
-problem_display.place(relx=0.5, y=200, anchor="center")
+problem_display = tk.Label(
+    game_frame,
+    font=("Arial", 26, "bold"),
+    bg=PANEL_BG,
+    fg="#FFFFFF",
+    padx=40,
+    pady=20,
+    highlightbackground=ACCENT_CYAN,
+    highlightthickness=2,
+    bd=0
+)
+problem_display.place(relx=0.5, y=190, anchor="center")
 
 # Answer input area
-input_container = tk.Frame(game_frame, bg="#1B5E20", relief=tk.RAISED, bd=3)
-input_container.place(relx=0.5, y=280, anchor="center")
+input_glow = tk.Frame(game_frame, bg="#0D6EFD", bd=0, highlightthickness=0)
+input_glow.place(relx=0.5, y=285, anchor="center")
+
+input_container = tk.Frame(
+    input_glow,
+    bg=INPUT_BG,
+    relief=tk.FLAT,
+    bd=0,
+    highlightbackground=ACCENT_CYAN,
+    highlightthickness=3,
+    padx=10,
+    pady=10
+)
+input_container.pack()
 
 # Player answer input
-answer_input = tk.Entry(input_container, font=("Arial", 20, "bold"), width=12,
-                       bg="#1B5E20", fg="#FFFFFF", insertbackground="#FFFFFF",
-                       relief=tk.SOLID, bd=4, justify="center")
-answer_input.pack(side=tk.LEFT, padx=12, pady=10)
+answer_input = tk.Entry(
+    input_container,
+    font=("Arial", 22, "bold"),
+    width=10,
+    bg=ENTRY_BG,
+    fg=ENTRY_TEXT_COLOR,
+    insertbackground="#FFFFFF",
+    relief=tk.FLAT,
+    justify="center"
+)
+answer_input.pack(side=tk.LEFT, padx=12)
 answer_input.bind('<Return>', lambda e: check_player_answer())
+answer_input.bind('<FocusIn>', lambda e: set_input_state())
+answer_input.bind('<Key>', lambda e: set_input_state())
+set_input_state()
 
 # Submit action button
-submit_action = tk.Button(input_container, text="SOLVE", font=("Arial", 14, "bold"),
-                         command=check_player_answer, bg="#E65100", fg="#FFFFFF",
-                         activebackground="#FF5722", relief=tk.RAISED, bd=4,
-                         cursor="hand2", padx=25, pady=10)
-submit_action.pack(side=tk.LEFT, padx=12, pady=10)
+submit_action = tk.Button(
+    input_container,
+    text="SOLVE",
+    font=("Arial", 16, "bold"),
+    command=check_player_answer,
+    bg=ACCENT_ORANGE,
+    fg="#FFFFFF",
+    activebackground="#FF9B54",
+    relief=tk.FLAT,
+    cursor="hand2",
+    padx=25,
+    pady=10
+)
+submit_action.pack(side=tk.LEFT, padx=(12, 5))
 
 # Result feedback
-result_display = tk.Label(game_frame, font=("Arial", 16, "bold"), 
-                         bg="black", fg="#FFFFFF", padx=10, pady=5)
-result_display.place(relx=0.5, y=340, anchor="center")
-
-# Score tracking
-score_indicator = tk.Label(game_frame, font=("Arial", 16, "bold"), 
-                          bg="black", fg="#FFD700", padx=10, pady=5)
-score_indicator.place(relx=0.5, y=380, anchor="center")
+result_display = tk.Label(
+    game_frame,
+    font=("Arial", 18, "bold"),
+    bg=PRIMARY_BG,
+    fg="#FFFFFF",
+    pady=8
+)
+result_display.place(relx=0.5, y=360, anchor="center")
 
 # Power-up controls
-powerup_frame = tk.Frame(game_frame, bg="black", relief=tk.RAISED, bd=2)
-powerup_frame.place(relx=0.85, y=150, anchor="center")
+powerup_frame = tk.Frame(
+    game_frame,
+    bg=PANEL_BG,
+    relief=tk.FLAT,
+    bd=0,
+    highlightbackground=ACCENT_CYAN,
+    highlightthickness=1,
+    padx=10,
+    pady=10
+)
+powerup_frame.place(relx=0.82, y=300, anchor="center")
 
 # Power-up title
-powerup_title = tk.Label(powerup_frame, text="SPACE BOOSTS 🚀", 
-                        font=("Arial", 12, "bold"), bg="black", fg="#FFD700")
+powerup_title = tk.Label(
+    powerup_frame,
+    text="SPACE BOOSTS 🚀",
+    font=("Arial", 13, "bold"),
+    bg=PANEL_BG,
+    fg=ACCENT_GOLD
+)
 powerup_title.pack(pady=(5, 10))
 
 # Boost counter
-powerup_indicator = tk.Label(powerup_frame, text="BOOSTS: 3", 
-                            font=("Arial", 11, "bold"), bg="black", fg="#00E676")
+powerup_indicator = tk.Label(
+    powerup_frame,
+    text="BOOSTS: 3",
+    font=("Arial", 11, "bold"),
+    bg=PANEL_BG,
+    fg=SUCCESS_COLOR
+)
 powerup_indicator.pack()
 
 # Time boost button
-time_boost_btn = tk.Button(powerup_frame, text="⏰ TIME BOOST\n+15 Seconds", 
-                          font=("Arial", 10, "bold"), command=activate_time_boost, 
-                          bg="#01579B", fg="white", activebackground="#0277BD",
-                          relief=tk.RAISED, bd=3, padx=15, pady=8, width=12,
-                          cursor="hand2")
+time_boost_btn = tk.Button(
+    powerup_frame,
+    text="⏰ TIME BOOST\n+15 Seconds",
+    font=("Arial", 10, "bold"),
+    command=activate_time_boost,
+    bg="#1565C0",
+    fg="white",
+    activebackground="#1E88E5",
+    relief=tk.FLAT,
+    padx=15,
+    pady=8,
+    width=12,
+    cursor="hand2"
+)
 time_boost_btn.pack(pady=8)
 
 # Double points button  
-double_points_btn = tk.Button(powerup_frame, text="💎 DOUBLE POINTS\nNext Answer x2", 
-                             font=("Arial", 10, "bold"), command=activate_double_points,
-                             bg="#880E4F", fg="white", activebackground="#AD1457",
-                             relief=tk.RAISED, bd=3, padx=15, pady=8, width=12,
-                             cursor="hand2")
+double_points_btn = tk.Button(
+    powerup_frame,
+    text="💎 DOUBLE POINTS\nNext Answer x2",
+    font=("Arial", 10, "bold"),
+    command=activate_double_points,
+    bg="#9C27B0",
+    fg="white",
+    activebackground="#AB47BC",
+    relief=tk.FLAT,
+    padx=15,
+    pady=8,
+    width=12,
+    cursor="hand2"
+)
 double_points_btn.pack(pady=8)
 
 # Power-up instructions
-instructions = tk.Label(powerup_frame, text="Use boosts wisely!\nLimited supply.", 
-                       font=("Arial", 9), bg="black", fg="#B0BEC5")
+instructions = tk.Label(
+    powerup_frame,
+    text="Use boosts wisely!\nLimited supply.",
+    font=("Arial", 9),
+    bg=PANEL_BG,
+    fg="#B0BEC5"
+)
 instructions.pack(pady=(10, 5))
 
 
