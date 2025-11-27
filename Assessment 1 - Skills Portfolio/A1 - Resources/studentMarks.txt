@@ -1,5 +1,5 @@
 10
-1345,John Curry,8,15,7,45
+1345,John Curry,10,10,10,100
 2345,Sam Sturtivant,14,15,14,77
 9876,Lee Scott,17,11,16,99
 3724,Matt Thompson,19,11,15,81

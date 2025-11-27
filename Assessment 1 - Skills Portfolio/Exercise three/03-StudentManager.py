@@ -1,3 +1,7 @@
+# Exercise 3 - Student Manager
+# This app loads student marks from a file and lets you view/analyze them
+# Also has extension features to add, delete, update, and sort students
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,25 +16,30 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_PATH = BASE_DIR / "A1 - Resources" / "studentMarks.txt"
 
 
+# Using dataclass to store student info - makes it easier to work with
 @dataclass
 class StudentRecord:
     student_id: int
     name: str
-    coursework_marks: List[int]
+    coursework_marks: List[int]  # list of 3 coursework marks
     exam_mark: int
 
+    # Calculate total coursework marks (out of 60)
     @property
     def coursework_total(self) -> int:
         return sum(self.coursework_marks)
 
+    # Total of coursework + exam (out of 160)
     @property
     def overall_total(self) -> int:
         return self.coursework_total + self.exam_mark
 
+    # Calculate percentage based on 160 total marks
     @property
     def percentage(self) -> float:
         return (self.overall_total / 160) * 100
 
+    # Assign grade based on percentage
     @property
     def grade(self) -> str:
         pct = self.percentage
@@ -45,6 +54,9 @@ class StudentRecord:
         return "F"
 
 
+# Load students from the text file
+# format is: id,name,cw1,cw2,cw3,exam
+# first line is the number of students
 def load_students() -> List[StudentRecord]:
     """Load student records from the dataset."""
     students: List[StudentRecord] = []
@@ -52,22 +64,23 @@ def load_students() -> List[StudentRecord]:
         with DATA_PATH.open(encoding="utf-8") as dataset:
             lines = [line.strip() for line in dataset.readlines() if line.strip()]
     except FileNotFoundError:
-        return students
+        return students  # return empty list if file doesnt exist
 
     if not lines:
         return students
 
+    # skip first line (its just the count) and process each student
     for row in lines[1:]:
         parts = [part.strip() for part in row.split(",")]
-        if len(parts) != 6:
+        if len(parts) != 6:  # should have 6 parts
             continue
         try:
             student_id = int(parts[0])
             name = parts[1]
-            coursework = list(map(int, parts[2:5]))
+            coursework = list(map(int, parts[2:5]))  # convert cw marks to ints
             exam = int(parts[5])
         except ValueError:
-            continue
+            continue  # skip invalid rows
 
         students.append(
             StudentRecord(
@@ -81,11 +94,14 @@ def load_students() -> List[StudentRecord]:
     return students
 
 
+# Save students back to the file
+# used when adding, deleting, or updating students
 def save_students(students: List[StudentRecord]) -> None:
     """Persist records back to the dataset file."""
-    lines = [str(len(students))]
+    lines = [str(len(students))]  # first line is the count
     for student in students:
         coursework = ",".join(map(str, student.coursework_marks))
+        # format: id,name,cw1,cw2,cw3,exam
         lines.append(
             f"{student.student_id},{student.name},{coursework},{student.exam_mark}"
         )
@@ -115,6 +131,8 @@ def class_summary(students: List[StudentRecord]) -> str:
     )
 
 
+# Find a student by ID or name
+# can search by typing part of their name or their full ID
 def find_student(students: List[StudentRecord], query: str) -> Optional[StudentRecord]:
     """Find a student either by numerical id or name substring."""
     query = query.strip().lower()
@@ -122,8 +140,10 @@ def find_student(students: List[StudentRecord], query: str) -> Optional[StudentR
         return None
 
     for student in students:
+        # check if they entered a number and it matches an ID
         if query.isdigit() and int(query) == student.student_id:
             return student
+        # or check if the query is in their name (case insensitive)
         if query in student.name.lower():
             return student
 
@@ -291,11 +311,14 @@ class StudentManagerApp(tk.Tk):
         result = format_record(student)
         self.show_message(result)
 
+    # Find student with highest or lowest score
+    # using max/min with a key function to compare by overall_total
     def show_extreme(self, *, highest: bool) -> None:
         if not self.students:
             self.show_message("No student data available.")
             return
 
+        # find the student with max or min overall total
         target = max(self.students, key=lambda s: s.overall_total) if highest else min(
             self.students, key=lambda s: s.overall_total
         )
@@ -307,9 +330,11 @@ class StudentManagerApp(tk.Tk):
             text=f"Dataset size: {len(self.students)} | {note}"
         )
 
+    # Save changes to file and reload the data
+    # used after add/delete/update operations
     def persist_and_refresh(self, note: str) -> None:
-        save_students(self.students)
-        self.students = load_students()
+        save_students(self.students)  # write to file
+        self.students = load_students()  # reload to make sure its synced
         self.refresh_status(note)
 
     # === Extension Features ===
@@ -354,6 +379,8 @@ class StudentManagerApp(tk.Tk):
             pady=8,
         ).pack(pady=5)
 
+    # Sort students by their overall score
+    # can sort ascending (low to high) or descending (high to low)
     def sort_records(self, descending: bool) -> None:
         ordered = sorted(
             self.students, key=lambda s: s.overall_total, reverse=descending
@@ -362,6 +389,7 @@ class StudentManagerApp(tk.Tk):
         parts = [
             f"Records sorted in {order_text} order by total score.\n"
         ]
+        # show each student with their rank
         for idx, student in enumerate(ordered, start=1):
             parts.append(f"Rank {idx}\n{format_record(student)}")
         self.show_message("\n".join(parts))
@@ -408,10 +436,12 @@ class StudentManagerApp(tk.Tk):
                 messagebox.showerror("Invalid Input", "Student name cannot be empty.")
                 return
 
+            # check if ID already exists
             if any(s.student_id == student_id for s in self.students):
                 messagebox.showerror("Duplicate ID", "A student with this ID already exists.")
                 return
 
+            # create new student record and add it
             new_record = StudentRecord(
                 student_id=student_id,
                 name=name,
@@ -419,7 +449,7 @@ class StudentManagerApp(tk.Tk):
                 exam_mark=exam,
             )
             self.students.append(new_record)
-            self.persist_and_refresh("Student added")
+            self.persist_and_refresh("Student added")  # save to file
             self.show_message(f"New student added successfully.\n\n{format_record(new_record)}")
             dialog.destroy()
 
@@ -457,11 +487,13 @@ class StudentManagerApp(tk.Tk):
                 messagebox.showwarning("Not Found", "No matching student found.")
                 return
 
+            # ask for confirmation before deleting
             if not messagebox.askyesno(
                 "Confirm Delete", f"Delete record for {student.name}?"
             ):
                 return
 
+            # remove student from list (keep all except the one to delete)
             self.students = [s for s in self.students if s.student_id != student.student_id]
             self.persist_and_refresh("Student removed")
             self.show_message(f"Record removed:\n\n{format_record(student)}")

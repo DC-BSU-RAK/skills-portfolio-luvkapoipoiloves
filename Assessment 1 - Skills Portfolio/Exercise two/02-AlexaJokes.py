@@ -1,8 +1,13 @@
+# Exercise 2 - Alexa Joke Assistant
+# This app tells jokes from a file and can speak them out loud
+# Added voice feature cause it makes it more fun
+
 import random
 import threading
 import tkinter as tk
 from pathlib import Path
 
+# pyttsx3 is optional - if its not installed the app still works just without voice
 try:
     import pyttsx3  # type: ignore
 except ImportError:  # pragma: no cover - optional dependency
@@ -13,6 +18,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 JOKES_PATH = BASE_DIR / "A1 - Resources" / "randomJokes.txt"
 
 
+# Load jokes from the text file
+# jokes are formatted like "question?answer" on each line
 def load_jokes():
     """Load jokes as (setup, punchline) tuples."""
     jokes = []
@@ -20,15 +27,18 @@ def load_jokes():
         with JOKES_PATH.open(encoding="utf-8") as handle:
             for raw_line in handle:
                 line = raw_line.strip()
+                # skip empty lines or lines without a question mark
                 if not line or "?" not in line:
                     continue
+                # split at the question mark to get setup and punchline
                 setup, punchline = line.split("?", 1)
                 setup = setup.strip()
                 punchline = punchline.strip()
+                # only add if both parts exist
                 if setup and punchline:
                     jokes.append((setup + "?", punchline))
     except FileNotFoundError:
-        pass
+        pass  # if file doesnt exist just return empty list
     return jokes
 
 
@@ -52,6 +62,8 @@ class JokeAssistant(tk.Tk):
 
         self._build_ui()
 
+    # Try to set up text to speech
+    # had some issues getting this working at first but figured it out
     def _init_voice(self):
         """Prepare text-to-speech engine if pyttsx3 is available."""
         if pyttsx3 is None:
@@ -60,12 +72,13 @@ class JokeAssistant(tk.Tk):
 
         try:
             engine = pyttsx3.init()
-            engine.setProperty("rate", self.voice_rate)
+            engine.setProperty("rate", self.voice_rate)  # how fast it talks
             engine.stop()
             self.voice_supported = True
             self.voice_ready = True
             self.voice_message = "Voice assistant ready."
         except Exception:
+            # if something goes wrong just disable voice
             self.voice_supported = False
             self.voice_ready = False
             self.voice_message = "Voice unavailable (initialisation failed)."
@@ -174,6 +187,7 @@ class JokeAssistant(tk.Tk):
         )
         return f"{jokes_text} {self.voice_message}"
 
+    # Pick a random joke and show the setup
     def deliver_joke(self):
         if not self.jokes:
             self.setup_label.config(text="Oops! I couldn't find any jokes.")
@@ -181,12 +195,13 @@ class JokeAssistant(tk.Tk):
             self.punchline_btn.config(state=tk.DISABLED)
             return
 
+        # pick a random joke from the list
         self.current_joke = random.choice(self.jokes)
         setup, _ = self.current_joke
         self.setup_label.config(text=setup)
         self.punchline_label.config(text="(Tap 'Show Punchline' to reveal)")
-        self.punchline_btn.config(state=tk.NORMAL)
-        self.speak_text(setup)
+        self.punchline_btn.config(state=tk.NORMAL)  # enable the button
+        self.speak_text(setup)  # say it out loud if voice is enabled
 
     def reveal_punchline(self):
         if self.current_joke:
@@ -195,21 +210,26 @@ class JokeAssistant(tk.Tk):
             self.punchline_btn.config(state=tk.DISABLED)
             self.speak_text(punchline)
 
+    # Speak the text using text to speech
+    # using threading so the UI doesnt freeze while talking
     def speak_text(self, text):
         """Speak text asynchronously if voice support is available."""
         if not self.voice_supported or not text:
             return
 
+        # worker function that runs in a separate thread
         def _worker(message, rate):
             try:
+                # create new engine each time cause reusing it was buggy
                 engine = pyttsx3.init()
                 engine.setProperty("rate", rate)
                 engine.say(message)
-                engine.runAndWait()
+                engine.runAndWait()  # wait for it to finish speaking
                 engine.stop()
             except Exception:
-                pass
+                pass  # if it fails just ignore it
 
+        # start the speech in a background thread
         threading.Thread(
             target=_worker, args=(text, self.voice_rate), daemon=True
         ).start()

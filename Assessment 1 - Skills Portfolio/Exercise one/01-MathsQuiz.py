@@ -1,3 +1,7 @@
+# Exercise 1 - Space Math Adventure Quiz
+# This is my math quiz game with different difficulty levels
+# I used tkinter for the GUI and PIL for images
+
 import tkinter as tk
 from tkinter import messagebox
 from PIL import Image, ImageTk
@@ -9,7 +13,8 @@ from config.animations import AnimationManager, ScreenManager
 from config.settings import *
 from utils.helpers import MathHelper, PowerUpManager
 
-
+# Color scheme for the game - wanted it to look space themed
+# spent way too long picking these colors lol
 PRIMARY_BG = "#020F1F"
 PANEL_BG = "#071A3F"
 INPUT_BG = "#04293A"
@@ -25,12 +30,14 @@ ERROR_COLOR = "#FF4C60"
 INFO_COLOR = "#4FC3F7"
 
 
-# Image loading helper with aspect ratio preservation
+# This function loads images and makes sure they dont get stretched weird
+# had to look up how to preserve aspect ratio cause my images were getting squished
 def load_image_with_aspect(path, max_width, max_height, remove_color=None):
     """Load image preserving aspect ratio"""
     try:
         original = Image.open(path).convert("RGBA")
         # Calculate aspect ratio preserving dimensions
+        # basically checking if image is wider or taller than what we want
         original_ratio = original.width / original.height
         target_ratio = max_width / max_height
         
@@ -45,12 +52,14 @@ def load_image_with_aspect(path, max_width, max_height, remove_color=None):
         
         resized = original.resize((new_width, new_height), Image.LANCZOS)
 
+        # This part removes black backgrounds from icons
+        # was annoying having black boxes around my rocket and exit buttons
         if remove_color is not None:
-            # Remove a solid background (e.g., black) to keep icons clean
             data = resized.getdata()
             cleaned = []
             target = tuple(remove_color)
             for pixel in data:
+                # if pixel matches the color we want to remove, make it transparent
                 if pixel[:3] == target:
                     cleaned.append((pixel[0], pixel[1], pixel[2], 0))
                 else:
@@ -65,28 +74,37 @@ def load_image_with_aspect(path, max_width, max_height, remove_color=None):
         return ImageTk.PhotoImage(fallback)
 
 
+# Helper function to show messages to the player
+# makes it easier to give feedback without repeating code everywhere
 def show_feedback(message, color="#FFFFFF", duration=1500):
     """Display smooth feedback messages in a consistent style."""
     if 'result_display' not in globals():
         return
     result_display.config(text=message, fg=color)
+    # auto clear the message after a bit so it doesnt stay forever
     if duration:
         main_window.after(duration, lambda: result_display.config(text=""))
 
 
+# Changes the input box color based on state
+# red when theres an error, normal blue otherwise
 def set_input_state(state="normal"):
     """Tint the answer box to reflect its current status."""
     if 'input_container' not in globals() or 'answer_input' not in globals():
         return
 
     if state == "error":
+        # turn red when user enters invalid stuff
         input_container.config(bg=ENTRY_ERROR_BG, highlightbackground=ERROR_COLOR)
         answer_input.config(bg="#1B0000", fg=ENTRY_TEXT_COLOR)
     else:
+        # normal blue color
         input_container.config(bg=INPUT_BG, highlightbackground=ACCENT_CYAN)
         answer_input.config(bg=ENTRY_BG, fg=ENTRY_TEXT_COLOR)
 
 # === Game Difficulty Levels ===
+# Using Enum cause it makes it easier to manage the different levels
+# each level has: id, color, background image, min number, max number
 class GameLevel(Enum):
     """Defines different challenge levels for space adventure"""
     BEGINNER = (0, "#4A6572", SPACE_BG_PATH, 1, 15)      # Simple numbers
@@ -115,18 +133,20 @@ class GameLevel(Enum):
 
 
 # === Game State Controller ===
+# This class keeps track of everything happening in the game
+# like score, what level, how many problems done, etc
 class GameSession:
     """Manages the complete game state and progress"""
     def __init__(self):
         self.current_level = GameLevel.BEGINNER
         self.points = 0
         self.problems_solved = 0
-        self.active_challenge = None
-        self.attempts_made = 0
+        self.active_challenge = None  # stores the current math problem
+        self.attempts_made = 0  # how many tries on current problem
         self.remaining_time = GAME_DURATION
-        self.timer_reference = None
-        self.active_powerups = []
-        self.powerup_charges = 3
+        self.timer_reference = None  # need this to cancel timer if needed
+        self.active_powerups = []  # list of active powerups
+        self.powerup_charges = 3  # how many boosts player has left
 
     def initialize_new_game(self, selected_level=GameLevel.BEGINNER):
         """Prepare for a new game session"""
@@ -161,8 +181,10 @@ class GameEngine:
     @staticmethod
     def select_operation():
         """Randomly choose mathematical operation"""
-        operations = ['+', '-', '*']  # Added multiplication for variety
-        weights = [40, 40, 20]  # Weighted probability
+        # Added multiplication to make it more interesting
+        # weights make addition/subtraction more common than multiplication
+        operations = ['+', '-', '*']
+        weights = [40, 40, 20]  # 40% add, 40% subtract, 20% multiply
         return random.choices(operations, weights=weights)[0]
     
     @staticmethod
@@ -172,11 +194,12 @@ class GameEngine:
         num2 = GameEngine.generate_number(level)
         operation = GameEngine.select_operation()
 
-        # Ensure positive results and reasonable difficulty
+        # Make sure subtraction gives positive answers (swap if needed)
+        # and keep multiplication simple for beginners
         if operation == '-' and num1 < num2:
-            num1, num2 = num2, num1
+            num1, num2 = num2, num1  # swap so we dont get negative answers
         elif operation == '*' and level == GameLevel.BEGINNER:
-            num2 = random.randint(2, 5)  # Simpler multiplication for beginners
+            num2 = random.randint(2, 5)  # smaller numbers for beginners
 
         Game.active_challenge = (num1, num2, operation)
         
@@ -204,17 +227,20 @@ class GameEngine:
         is_correct = player_answer == correct
         
         if is_correct:
+            # give more points if they get it right first try
             base_points = 15 if Game.attempts_made == 0 else 7
             show_feedback(f"SUCCESS! +{base_points} POINTS", SUCCESS_COLOR, duration=1200)
             return True, base_points
         else:
             Game.attempts_made += 1
+            # give them 2 chances total
             if Game.attempts_made < 2:
                 show_feedback("NOT QUITE! TRY AGAIN!", WARNING_COLOR, duration=1200)
-                answer_input.delete(0, "end")
-                begin_countdown()
+                answer_input.delete(0, "end")  # clear the input
+                begin_countdown()  # restart timer
                 return False, 0
             else:
+                # show the answer if they fail twice
                 show_feedback(f"ANSWER: {correct}", ERROR_COLOR, duration=None)
                 return False, 0
     
@@ -247,10 +273,12 @@ class GameEngine:
 
 
 # === Power-Up System ===
+# Added powerups to make the game more fun
+# player gets 3 boosts per game
 def activate_time_boost():
     """Add extra time to current challenge"""
     if Game.powerup_charges > 0:
-        Game.remaining_time += 15
+        Game.remaining_time += 15  # add 15 seconds
         Game.powerup_charges -= 1
         powerup_indicator.config(text=f"BOOSTS: {Game.powerup_charges}")
         show_feedback("+15 SECONDS! ⏰", INFO_COLOR, duration=1000)
@@ -269,13 +297,15 @@ def activate_double_points():
     else:
         show_feedback("DOUBLE POINTS ALREADY ACTIVE! ✨", WARNING_COLOR)
 
+# Apply any active powerups to the points earned
 def apply_powerup_effects(points):
     """Apply active power-up effects to scored points"""
     final_points = points
     
+    # check if double points is active and apply it
     if 'double_points' in Game.active_powerups:
         final_points *= 2
-        Game.active_powerups.remove('double_points')
+        Game.active_powerups.remove('double_points')  # remove after using
         show_feedback(f"DOUBLE POINTS ACTIVATED! +{final_points} 🎉", "#FF5AA5")
     
     return final_points
@@ -287,17 +317,20 @@ def begin_countdown():
     Game.remaining_time = GAME_DURATION
     update_timer_display()
 
+# Timer countdown - updates every second
 def update_timer_display():
     """Update and manage the countdown timer"""
     if Game.remaining_time >= 0:
+        # turn red when time is running out (less than 8 seconds)
         timer_indicator.config(
             text=f"TIME: {Game.remaining_time}s",
             fg=ERROR_COLOR if Game.remaining_time <= 8 else WARNING_COLOR
         )
         Game.remaining_time -= 1
+        # schedule next update in 1 second
         Game.timer_reference = main_window.after(1000, update_timer_display)
     else:
-        time_expired()
+        time_expired()  # time ran out
 
 def stop_timer():
     """Halt the countdown timer"""
@@ -343,16 +376,19 @@ def advance_to_next():
     else:
         show_game_results()
 
+# Check what the player entered
 def check_player_answer():
     """Process and validate player's solution"""
-    stop_timer()
+    stop_timer()  # stop the timer while checking
     
+    # make sure they entered a number, not text
     try:
         player_answer = int(answer_input.get())
     except ValueError:
+        # show error if they typed something weird
         set_input_state("error")
         show_feedback("PLEASE ENTER A VALID NUMBER", ERROR_COLOR)
-        main_window.after(800, set_input_state)
+        main_window.after(800, set_input_state)  # reset color after a bit
         begin_countdown()
         return
 
@@ -361,14 +397,16 @@ def check_player_answer():
     is_correct, base_points = GameEngine.verify_solution(num1, num2, operation, player_answer)
     
     if is_correct:
-        # Apply power-up effects before scoring
+        # Apply power-up effects before scoring (like double points)
         actual_points = apply_powerup_effects(base_points)
         Game.points += actual_points
         
-        disable_player_input()
+        disable_player_input()  # lock input while showing result
         score_indicator.config(text=f"SCORE: {Game.points}/{15 * MAX_CHALLENGES}")
+        # wait a bit then move to next problem
         main_window.after(1500, advance_to_next)
     else:
+        # if they used up all attempts, move on
         if Game.attempts_made >= 2:
             disable_player_input()
             score_indicator.config(text=f"SCORE: {Game.points}/{15 * MAX_CHALLENGES}")
@@ -428,16 +466,19 @@ def display_screen(screen):
 
 
 # === Main Application Window ===
+# Create the main window
 main_window = tk.Tk()
 main_window.title("Space Math Adventure")
 main_window.geometry(f"{APP_WIDTH}x{APP_HEIGHT}")
-main_window.resizable(False, False)
+main_window.resizable(False, False)  # dont let them resize it
 
-# Create application screens
+# Create the different screens (menu, level select, game)
+# using frames that we can switch between
 main_menu_frame = tk.Frame(main_window, bg="black")
 level_select_frame = tk.Frame(main_window, bg="black")
 game_frame = tk.Frame(main_window, bg=PRIMARY_BG)
 
+# make all screens fill the window
 for screen in (main_menu_frame, level_select_frame, game_frame):
     screen.place(relwidth=1, relheight=1)
 
@@ -457,10 +498,10 @@ subtitle_label = tk.Label(main_menu_frame, text="Master Mathematics Among the St
                          font=("Arial", 16), bg="black", fg="#4FC3F7")
 subtitle_label.place(relx=0.5, rely=0.3, anchor="center")
 
-# Launch Adventure button
+# Launch Adventure button - using image instead of text button
 launch_image = load_image_with_aspect(START_IMG_PATH, 300, 65, remove_color=(0, 0, 0))
 launch_button = tk.Label(main_menu_frame, image=launch_image, bg="black", cursor="hand2")
-launch_button.image = launch_image
+launch_button.image = launch_image  # need to keep reference or image disappears
 launch_button.bind("<Button-1>", lambda e: GameEngine.show_level_selection())
 launch_button.place(relx=0.5, rely=0.6, anchor="center")
 
@@ -583,7 +624,7 @@ problem_display = tk.Label(
 )
 problem_display.place(relx=0.5, y=190, anchor="center")
 
-# Answer input area
+# Answer input area - made it look nicer with a glow effect
 input_glow = tk.Frame(game_frame, bg="#0D6EFD", bd=0, highlightthickness=0)
 input_glow.place(relx=0.5, y=285, anchor="center")
 
@@ -593,13 +634,13 @@ input_container = tk.Frame(
     relief=tk.FLAT,
     bd=0,
     highlightbackground=ACCENT_CYAN,
-    highlightthickness=3,
+    highlightthickness=3,  # cyan border
     padx=10,
     pady=10
 )
 input_container.pack()
 
-# Player answer input
+# Player answer input - where they type their answer
 answer_input = tk.Entry(
     input_container,
     font=("Arial", 22, "bold"),
@@ -611,10 +652,12 @@ answer_input = tk.Entry(
     justify="center"
 )
 answer_input.pack(side=tk.LEFT, padx=12)
+# pressing enter submits the answer
 answer_input.bind('<Return>', lambda e: check_player_answer())
+# reset color when they focus or type
 answer_input.bind('<FocusIn>', lambda e: set_input_state())
 answer_input.bind('<Key>', lambda e: set_input_state())
-set_input_state()
+set_input_state()  # set initial color
 
 # Submit action button
 submit_action = tk.Button(
@@ -720,6 +763,6 @@ instructions = tk.Label(
 instructions.pack(pady=(10, 5))
 
 
-# Initialize application
+# Initialize application - start with the main menu
 display_screen(main_menu_frame)
-main_window.mainloop()
+main_window.mainloop()  # start the event loop
